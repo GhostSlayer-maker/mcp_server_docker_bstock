@@ -1,0 +1,43 @@
+# Definimos la red externa a la que nos conectaremos
+networks:
+  default:
+    name: odoo17_network
+    external: true
+
+services:
+  mcp_service:
+    # Nombre del contenedor
+    container_name: mcp_service
+    
+    # Imagen base de Python 3.11-slim
+    build: .
+    image: mcp_service_image
+    
+    # Variables de entorno para la conexión a PostgreSQL
+    environment:
+      - DB_HOST=odoo17_db
+      - DB_PORT=5432
+      - DB_USER=odoo
+      - DB_PASSWORD=odoo17@2023
+      - DB_NAME=odooCPM
+    
+    # Montamos un volumen local para el código del MCP en /app
+    volumes:
+      - .:/app
+    
+    # Exponemos el puerto 5000 para la API REST del MCP
+    ports:
+      - "5000:5000"
+    
+    # Healthcheck que verifica la conexión a PostgreSQL
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+
+    
+    # Reinicio automático en caso de fallo
+    restart: unless-stopped
