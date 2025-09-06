@@ -1,35 +1,39 @@
 # Definimos la red externa a la que nos conectaremos
 networks:
   default:
-    name: odoo17_network
+    name: ${NETWORK_NAME}
     external: true
 
 services:
   mcp_service:
-    # Nombre del contenedor
+    env_file:
+      - .env
     container_name: mcp_service
     
-    # Imagen base de Python 3.11-slim
     build: .
     image: mcp_service_image
     
-    # Variables de entorno para la conexión a PostgreSQL
+    # Usar variables de entorno desde .env
     environment:
-      - DB_HOST=odoo17_db
-      - DB_PORT=5432
-      - DB_USER=odoo
-      - DB_PASSWORD=odoo17@2023
-      - DB_NAME=odooCPM
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - MCP_HOST=${MCP_HOST}
+      - MCP_PORT=${MCP_PORT}
+      - API_KEY=${API_KEY}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - DEFAULT_QUERY_LIMIT=${DEFAULT_QUERY_LIMIT}
+      - MAX_QUERY_LIMIT=${MAX_QUERY_LIMIT}
     
-    # Montamos un volumen local para el código del MCP en /app
     volumes:
       - .:/app
+      - ./python_libs:/usr/src/app/site-packages  # persist Python packages
     
-    # Exponemos el puerto 5000 para la API REST del MCP
     ports:
-      - "5000:5000"
+      - "${MCP_PORT}:${MCP_PORT}"
     
-    # Healthcheck que verifica la conexión a PostgreSQL
     healthcheck:
       test: ["CMD", "python", "/app/healthcheck.py"]
       interval: 30s
@@ -37,7 +41,21 @@ services:
       retries: 3
       start_period: 40s
     
-
-    
-    # Reinicio automático en caso de fallo
     restart: unless-stopped
+    
+    # Configuración de recursos usando variables de entorno
+    deploy:
+      resources:
+        limits:
+          cpus: '${CPU_LIMIT}'
+          memory: '${MEMORY_LIMIT}'
+        reservations:
+          cpus: '${CPU_RESERVATION}'
+          memory: '${MEMORY_RESERVATION}'
+    
+    # Configuración de logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

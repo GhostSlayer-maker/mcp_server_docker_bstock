@@ -1,23 +1,23 @@
 import os
-import logging
-from fastapi import FastAPI, HTTPException
+import os
 import psycopg2
-from psycopg2 import sql, extras
+from psycopg2 import extras
+from fastapi import FastAPI, HTTPException, status, Depends
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any, Optional
+from psycopg2 import sql
+from fastapi.security import APIKeyHeader
+import logging
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde .env
+load_dotenv()
 
 # Configuración de logging
-logging.basicConfig(level=logging.INFO)
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
-# Obtener variables de entorno
-DB_HOST = os.getenv('DB_HOST', 'odoo17_db')
-DB_PORT = os.getenv('DB_PORT', '5432')
-DB_USER = os.getenv('DB_USER', 'odoo')
-DB_PASSWORD = os.getenv('DB_PASSWORD', 'odoo17@2023')
-DB_NAME = os.getenv('DB_NAME', 'odooCPM')
-
-# Inicializar FastAPI
 app = FastAPI(
     title="MCP Server",
     description="Model Context Protocol Server for Odoo",
@@ -25,20 +25,32 @@ app = FastAPI(
     redoc_url="/api/redoc"
 )
 
+# Seguridad: API Key
+API_KEY_NAME = "X-API-KEY"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=True)
+
+async def get_api_key(api_key: str = Depends(api_key_header)):
+    if api_key != os.getenv("API_KEY", "your-secret-key"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API Key",
+        )
+    return api_key
+
 # Función para conectar a la base de datos
 def get_db_connection():
     try:
         conn = psycopg2.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            dbname=DB_NAME,
+            host=os.getenv('DB_HOST', 'localhost'),
+            port=os.getenv('DB_PORT', '5432'),
+            user=os.getenv('DB_USER', 'odoo'),
+            password=os.getenv('DB_PASSWORD', 'odoo17@2023'),
+            dbname=os.getenv('DB_NAME', 'postgres'),
             cursor_factory=extras.RealDictCursor
         )
         return conn
     except Exception as e:
-        logger.error(f"Error connecting to database: {e}")
+        logger.error(f"Error connecting to database: {e}", exc_info=True)
         return None
 
 # Endpoint de health check
@@ -47,19 +59,30 @@ def get_db_connection():
 # Respuesta exitosa: {"status": "healthy", "database": "connected"}
 # Respuesta de error: HTTP 500 si falla la conexión a la base de datos
 @app.get("/api/health")
-async def health_check():
+async def health_check(api_key: str = Depends(get_api_key)):
     conn = get_db_connection()
     if conn is None:
         raise HTTPException(status_code=500, detail="Database connection failed")
-    conn.close()
-    return {"status": "healthy", "database": "connected"}
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+            result = cur.fetchone()
+            if result['?column?'] == 1:
+                return {"status": "ok", "database_connection": "successful"}
+            else:
+                raise HTTPException(status_code=500, detail="Database query failed")
+    except Exception as e:
+        logger.error(f"Error in health check: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
 
 # Endpoint para listar tablas
 # GET /api/tables
 # Lista todas las tablas de Odoo que empiezan con 'ir_' o 'res_'
 # Respuesta exitosa: {"tables": ["nombre_tabla1", "nombre_tabla2", ...], "count": numero_total}
 # Respuesta de error: HTTP 500 si hay error en la base de datos
-@app.get("/api/tables")
+@app.get("/api/tables", dependencies=[Depends(get_api_key)])
 async def list_tables():
     conn = get_db_connection()
     if conn is None:
@@ -103,7 +126,7 @@ class TableData(BaseModel):
 # Respuesta de error:
 #   - HTTP 404 si la tabla no existe
 #   - HTTP 500 si hay error en la base de datos
-@app.get("/api/query/{table_name}", response_model=TableData)
+@app.get("/api/query/{table_name}", response_model=TableData, dependencies=[Depends(get_api_key)])
 async def query_table(table_name: str):
     conn = get_db_connection()
     if conn is None:
@@ -168,7 +191,7 @@ class CustomQuery(BaseModel):
 # Respuesta de error:
 #   - HTTP 400 si la consulta no es SELECT
 #   - HTTP 500 si hay error en la base de datos
-@app.post("/api/custom_query")
+@app.post("/api/custom_query", dependencies=[Depends(get_api_key)])
 async def execute_custom_query(query_data: CustomQuery):
     conn = get_db_connection()
     if conn is None:
