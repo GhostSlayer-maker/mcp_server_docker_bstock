@@ -89,7 +89,7 @@ async def list_tables():
         raise HTTPException(status_code=500, detail="Database connection failed")
     
     try:
-        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        with conn.cursor(cursor_factory=extras.RealDictCursor) as cur:
             # Consulta para obtener todas las tablas de Odoo
             query = sql.SQL("""
                 SELECT table_name 
@@ -212,10 +212,12 @@ async def execute_custom_query(query_data: CustomQuery):
             if query_data.params:
                 cur.execute(sql.SQL(query), query_data.params)
             else:
+                logger.info(f"Executing custom query: {query}")
                 cur.execute(sql.SQL(query))
             
             # Obtener los resultados
-            results = cur.fetchall()
+            results = cur.fetchmany(query_data.limit)
+            logger.info(f"Custom query returned {len(results)} results.")
             return {"results": results}
             
     except Exception as e:
