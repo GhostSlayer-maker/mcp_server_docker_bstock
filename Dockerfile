@@ -17,4 +17,4 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 COPY odoo_mcp /usr/src/app/odoo_mcp
 
 ENTRYPOINT ["entrypoint.sh"]
-CMD ["python", "-m", "uvicorn", "odoo_mcp.mcp_server:app", "--host", "0.0.0.0", "--port", "5000"]
+CMD ["python", "-m", "uvicorn", "odoo_mcp.mcp_server:app", "--host", "0.0.0.0"]

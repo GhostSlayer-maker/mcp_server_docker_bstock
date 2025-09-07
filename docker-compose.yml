@@ -25,11 +25,8 @@ services:
       - .:/app
       - ./python_libs:/usr/src/app/site-packages  # persist Python packages
     
-    ports:
-      - "${MCP_PORT}:${MCP_PORT}"
-    
-    # AGREGA ESTA LÍNEA PARA EJECUTAR EN MODO PRODUCCIÓN
-    command: python -m uvicorn odoo_mcp.mcp_server:app --host 0.0.0.0 --port 5000 --reload
+    # Configuración para producción - sin puerto expuesto
+    command: python -m uvicorn odoo_mcp.mcp_server:app --host 0.0.0.0 --port 5000
     
     healthcheck:
       test: ["CMD", "python", "/app/healthcheck.py"]
