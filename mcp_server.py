@@ -154,12 +154,52 @@ async def query_table(table_name: str):
             cur.execute(query_data, (10,))
             data = cur.fetchall()
             return TableData(table_name=table_name, data=data)
-            
-            
-            
 
     except Exception as e:
         logger.error(f"Error querying table {table_name}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+# Endpoint para obtener el esquema de una tabla
+# GET /api/schema/{table_name}
+# Obtiene el esquema de la tabla especificada (nombres de columnas y tipos de datos)
+@app.get("/api/schema/{table_name}", dependencies=[Depends(get_api_key)])
+async def get_table_schema(table_name: str):
+    conn = get_db_connection()
+    if conn is None:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+
+    try:
+        with conn.cursor(cursor_factory=extras.RealDictCursor) as cur:
+            # Verificar que la tabla existe
+            check_table_query = sql.SQL("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                    AND table_name = %s
+                );
+            """)
+            cur.execute(check_table_query, (table_name,))
+            table_exists = cur.fetchone()['exists']
+
+            if not table_exists:
+                raise HTTPException(status_code=404, detail=f"Table {table_name} not found")
+
+            # Obtener el esquema de la tabla
+            schema_query = sql.SQL("""
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                AND table_name = %s
+                ORDER BY ordinal_position;
+            """)
+            cur.execute(schema_query, (table_name,))
+            schema = cur.fetchall()
+            return {"table_name": table_name, "schema": schema}
+
+    except Exception as e:
+        logger.error(f"Error getting schema for table {table_name}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
@@ -179,6 +219,8 @@ class CustomQuery(BaseModel):
 #   "params": [param1, param2, ...] (opcional),
 #   "limit": numero_maximo_registros (opcional, default: 100)
 # }
+
+
 # Ejemplo de uso con PowerShell:
 # $body = @{
 #   query = 'SELECT name, email FROM res_partner LIMIT 5'
