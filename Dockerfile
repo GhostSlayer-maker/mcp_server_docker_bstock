@@ -8,13 +8,13 @@ WORKDIR /app
 
 # Create a directory for persistent Python packages
 
-COPY requirements.txt .
+COPY odoo_mcp/requirements.txt /app/
 RUN pip3 install --no-cache-dir -r requirements.txt --target=/usr/src/app/site-packages
 
 COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-COPY . .
+COPY odoo_mcp /usr/src/app/odoo_mcp
 
 ENTRYPOINT ["entrypoint.sh"]
-CMD ["python", "mcp_server.py"]
+CMD ["python", "-m", "uvicorn", "odoo_mcp.mcp_server:app", "--host", "0.0.0.0", "--port", "5000"]

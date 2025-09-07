@@ -268,7 +268,14 @@ async def execute_custom_query(query_data: CustomQuery):
     finally:
         conn.close()
 
-# Punto de entrada para ejecutar el servidor
+# AGREGA UN ENDPOINT RAÍZ
+@app.get("/")
+async def root():
+    return {"message": "MCP Server is running. See /api/docs for documentation."}
+
+# ... (código existente)
+
+# MODIFICA EL BLOQUE DE EJECUCIÓN
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=5000, debug=False, reload=False)
